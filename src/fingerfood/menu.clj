@@ -5,7 +5,14 @@
 (declare Command)
 
 (defprotocol Menu
-"Manages user interaction with a pagelen size menu of items from the backing collection. Paging methods nextp and prevp are expected to yield new Menus. User commands and their effect is specific, but at a minimum they should include display on demand, paging, selection and exiting from the menu. 
+"A hierarchical view of a collection which can be browsed in a user-friendly way: display, selection, paging and 
+ navigation between levels and within recent browsing history.
+
+ All navigation commands except 'select yield a Menu, and 'select's return is up to the implementation.
+
+ For all menu commands, a request that can't be accomdated e.g. for an out-of-bounds target, should result in a
+ sensible outcome: an error message and repeat prompt, or cycling are preferred rather than nil or throwing 
+ an exception.
 "
     (coll [this]
         "Yields the backing collection")
@@ -25,11 +32,8 @@
          if minus) by n pages")
 
     (history [this n]
-        "Unused, as navigation across levels breaks the concept of hierarchical
-         sessions: a session is created by entering a menu, and ended when exiting
-         it - see #browse. Need a new approach, e.g some kind of 'lazy zipper'.
-         Akin to a web browser's Forward/back buttons. Yields the nth menu (minus if going back)
-         in the history, from the current node.")
+         "Akin to a web browser's Forward/back buttons. Yields the nth menu (minus if going back)
+         in the history, from the current menu.")
 
     (^Command get-command [this]
         "Retrieves and formats user input. Yields a Command which provides the user
@@ -111,14 +115,15 @@
         "Yields the next read char as it is natively read"))
 
     
-(defn make-command-syntax [re error-fn]
+(defn make-command-syntax [complete-re partial-res error-fn]
     (reify CommandSyntax
         (valid?- [_ s]
-            (re-find re s))
+            (->> partial-res
+                 (some #(re-matches % s))))
         (valid? [_ s]
-            (re-matches re s))
+            (re-matches complete-re s))
         (error [this s]
-            (error-fn re s))))
+            (error-fn [complete-re partial-res] s))))
         
 
 (defn make-character-reader
@@ -146,7 +151,11 @@
         [ s   _   _    ] (Integer/parseInt s)))
         
 
-(defn parse-command [^String cmd]
+(defn parse-command 
+"Parses a validated command input into a Command object, using
+ *command-re* as syntax.
+"
+[^String cmd]
    (condp re-matches cmd
         #".*[mM]$" (make-command :menu true)
         #".*[qQ]$" (make-command :end true)
@@ -237,7 +246,8 @@
 (defn as-str [chars]
     (apply str chars))
 
-(def ^:dynamic *command-re* #"\s*(\d*[mMpPnNuUqQ]?|:e .*)\s*")
+(def ^:dynamic *command-re* #"(\d*[ mMpPnNuUqQ]?|:e .*)|")
+(def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
 
 #_(defn read-command
 "Reads characters from r and yields the command string as soon as 
@@ -269,8 +279,8 @@
                 (= \newline c) (if (.valid? stx cmd) cmd
                                    (do (try-again chars+)
                                         (recur (read) chars+)))
-                (.valid? cmd) cmd 
                 (.valid?- cmd) (recur (read) chars+)
+                (.valid? cmd) cmd 
                 :else
                     (do (try-again chars+)
                         (recur (read) chars+)))))))
