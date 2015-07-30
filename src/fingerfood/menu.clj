@@ -5,19 +5,6 @@
 
 (declare Command)
 
-(defn menu-prompt 
-"Prompt template into which are inserted  selection and filtering tags"
-([select-tag filter-tag]
-    (let [  select-tag (if select-tag (str "[" select-tag "] ") "")
-            filter-tag (if filter-tag (str "[" filter-tag "] ") "")]
-      (str select-tag filter-tag
-        "[Menu] [[n] Previous] [[n] Next] [[n] Up} [Quit] \n(<Enter> to exit this menu):")))
-([select-tag] 
-    (menu-prompt select-tag nil)))
-
-(def ^:dynamic *default-menu-prompt* (menu-prompt "Number"))
-(def ^:dynamic *command-re* #"(\d*)([ mMpPnNuUqQ])?|:e (.*)|")
-(def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
 
 (defprotocol Menu
 "A hierarchical view of a collection which can be browsed in a user-friendly way: display, selection, paging and 
@@ -70,7 +57,7 @@
 (defprotocol Command
  "Switches exposed by a menu command, mapping to mutually exclusive scenarios.
   Only one should yield a non-nil value."
-    (up-n? [cmd]
+    (up? [cmd]
         "Yields n when the user wants to exit the current menu to return to the 
          n-th menu above, or nil.")
     
@@ -78,7 +65,7 @@
         "Logically true only if the user wants to exit the menu hierarchy
          entirely.")
 
-    (page-n? [cmd]
+    (page? [cmd]
         "Yields a number of pages forward or backward (negative) to navigate to 
          in the current menu, or nil.")
 
@@ -131,6 +118,20 @@
         "Yields the next read char as it is natively read"))
 
     
+(defn menu-prompt 
+"Prompt template into which are inserted  selection and filtering tags"
+([select-tag filter-tag]
+    (let [  select-tag (if select-tag (str "[" select-tag "] ") "")
+            filter-tag (if filter-tag (str "[" filter-tag "] ") "")]
+      (str select-tag filter-tag
+        "[Menu] [[n] Previous] [[n] Next] [[n] Up} [Quit] \n(<Enter> to exit this menu):")))
+([select-tag] 
+    (menu-prompt select-tag nil)))
+
+(def ^:dynamic *default-menu-prompt* (menu-prompt "Number"))
+(def ^:dynamic *command-re* #"(\d*)([ mMpPnNuUqQ])?|:e (.*)|")
+(def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
+
 (defn make-command-syntax [complete-re partial-res error-fn]
     (reify CommandSyntax
         (valid?- [_ s]
@@ -153,9 +154,9 @@
 
 (defn make-command [ & {:keys [up end page menu selection edit]}]
     (reify Command
-        (up-n? [_] up)
+        (up? [_] up)
         (end? [_] end)
-        (page-n? [_] page) 
+        (page? [_] page) 
         (menu? [_] menu)
         (edit? [_] edit)
         (selection? [_] selection)))
@@ -179,7 +180,7 @@
 "
 [^String cmd]
 (let [ mc (fn ([type] (make-command type true))  
-              ([type digs & re] (make-command type 
+              ([type digs & [re]] (make-command type 
                                     (if re (Pattern/compile re)
                                             (parse-int digs))))) ]
     (match (re-matches *command-re* cmd)
@@ -188,9 +189,11 @@
         [_   _  (:or "m" "M")   _  ]   (mc :menu)
         [""  _  _               _  ]   (mc :up "1")
         [_   d  (:or "u" "U")   _  ]   (mc :up d)
+        [_  ""  (:or "n" "N")   _  ]   (mc :page "1")
         [_   d  (:or "n" "N")   _  ]   (mc :page d)
+        [_  ""  (:or "p" "P")   _  ]   (mc :page "-1")
         [_   d  (:or "p" "P")   _  ]   (mc :page (str "-" d))
-        [_   _      _           re ]   (mc :edit nil re)
+        [_   nil    nil         re ]   (mc :edit nil re)
         [_   d      nil       nil  ]   (mc :selection d))))
 
 
