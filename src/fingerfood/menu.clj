@@ -318,7 +318,7 @@
                                    (do (try-again chars+)
                                         (recur (read) [])))
                 (.valid?- stx cmd) (recur (read) chars+)
-                (.valid? stx cmd) cmd 
+                (.valid? stx cmd) (return cmd) 
                 :else
                     (do (try-again chars+)
                         (recur (read) [])))))))
