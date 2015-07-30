@@ -80,6 +80,8 @@
                i6 "P", act6 (get i6)     exp6  [:page -1]
                i7 "10n", act7 (get i7)   exp7 [:page 10]
                i71 "n", act71 (get i71)  exp71 [:page 1]
+               i72 " ", act72 (get i72)  exp72 [:page 1]
+               i73 "2 ", act73 (get i73) exp73 [:page 2]
                i8 "m",  act8 (get i8),   exp8 [:menu :menu]
                i9 "2M", act9 (get i9)    exp9 [:menu :menu]
                i10 ":e ", act10 (get i10),  exp10 [:edit #""]
@@ -92,6 +94,8 @@
             (is (= exp6 act6))
             (is (= exp7 act7))
             (is (= exp71 act71))
+            (is (= exp72 act72))
+            (is (= exp73 act73))
             (is (present? exp8 act8))
             (is (present? exp9  act9))
             (is (pat= exp10 act10))

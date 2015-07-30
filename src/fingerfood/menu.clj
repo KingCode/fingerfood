@@ -191,13 +191,13 @@
                                     (if re (Pattern/compile re)
                                             (parse-int digs))))) ]
     (match (re-matches *command-re* cmd)
-        ;; full, digits, cmd-type, re-str 
+   ;; full, digits, cmd-type, re-str 
         [_   _  (:or "q" "Q")   _  ]   (mc :end)
         [_   _  (:or "m" "M")   _  ]   (mc :menu)
         [""  _  _               _  ]   (mc :up "1")
         [_   d  (:or "u" "U")   _  ]   (mc :up d)
-        [_  ""  (:or "n" "N")   _  ]   (mc :page "1")
-        [_   d  (:or "n" "N")   _  ]   (mc :page d)
+        [_  ""  (:or " " "n" "N") _]   (mc :page "1")
+        [_   d  (:or " " "n" "N") _]   (mc :page d)
         [_  ""  (:or "p" "P")   _  ]   (mc :page "-1")
         [_   d  (:or "p" "P")   _  ]   (mc :page (str "-" d))
         [_   nil    nil         re ]   (mc :edit nil re)
@@ -268,29 +268,9 @@
     (make-command :up (dec n)))
 
 
-
-
 (defn as-str [chars]
     (apply str chars))
 
-
-#_(defn read-command
-"Reads characters from r and yields the command string as soon as 
- determined, or until newline is read.
- "
-([term syntax-re]
-(loop [ i (.readCharacter term) chars []]
-    (let [c (char i)]
-        (if (= \newline c) 
-           (as-str chars)
-           (let [ chars+ (conj chars c)
-                  cmd (as-str chars+) ]
-                (if
-                    (syntax-ok? cmd) cmd
-                    (recur (.readCharacter term) chars+))))))) 
-([]
-    (read-command (ConsoleReader.))))
-                
 
 (defn enter-key? [ c ]
     (re-matches #"[\r\n]" (str c)))
