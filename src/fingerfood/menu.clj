@@ -132,7 +132,9 @@
 (def ^:dynamic *command-re* #"(\d*)([ mMpPnNuUqQ])?|:e (.*)|")
 (def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
 
-(defn make-command-syntax [complete-re partial-res error-fn]
+
+(defn make-command-syntax 
+([complete-re partial-res error-fn]
     (reify CommandSyntax
         (valid?- [_ s]
             (->> partial-res
@@ -140,7 +142,12 @@
         (valid? [_ s]
             (re-matches complete-re s))
         (error [this s]
-            (error-fn [complete-re partial-res] s))))
+            (error-fn [[complete-re partial-res]] s))))
+([error-fn]
+    (make-command-syntax *command-re* *command-re-partials* error-fn))
+([]
+    (make-command-syntax (fn [_] "Error, ppPAL!!"))))
+
         
 
 (defn make-character-reader
@@ -285,30 +292,51 @@
     (read-command (ConsoleReader.))))
                 
 
+(defn enter-key? [ c ]
+    (re-matches #"[\r\n]" (str c)))
+
+
 (defn get-cmd-impl [^fingerfood.menu.CommandSyntax stx ^fingerfood.menu.ReadChar rdr ^String prompt]
     (printn prompt)
-    (let [ read #(char (.readChar rdr))
+    (let [ read #(char (.read-char rdr))
            try-again #(do (println (.error stx (as-str %)))
-                        (printn prompt))]
+                        (printn prompt))
+
+           ;;when testing this prevents seeing a CR overwrite by the result
+           return (fn [res] (println) res)]
         (loop [c (read) chars []]
-            (let [ chars+ (conj chars c)
-                   cmd (as-str chars+)]
+            (let [ 
+                   ;;  necessary in repl-mode at least  
+                   _ (printn c) 
+
+                   chars+ (if (= \return c) chars (conj chars c))
+                   cmd (as-str chars+)
+                   #_(printn (str "CHAR: >" c "<, CHARS+:>" chars+ "<, CMD:>" cmd "<\n"))]
+
             (cond 
-                (= \newline c) (if (.valid? stx cmd) cmd
+                (enter-key? c) (if (.valid? stx cmd) (return cmd)
                                    (do (try-again chars+)
-                                        (recur (read) chars+)))
-                (.valid?- cmd) (recur (read) chars+)
-                (.valid? cmd) cmd 
+                                        (recur (read) [])))
+                (.valid?- stx cmd) (recur (read) chars+)
+                (.valid? stx cmd) cmd 
                 :else
                     (do (try-again chars+)
-                        (recur (read) chars+)))))))
+                        (recur (read) [])))))))
     
-(defn make-input-dialog [prompt re error-fn] 
-    (let [ syntax (make-command-syntax re error-fn)
+(defn make-input-dialog 
+([prompt re re-partials error-fn] 
+    (let [ syntax (make-command-syntax re re-partials error-fn)
            reader  (make-character-reader)]
         (reify InputDialog
             (get-cmd [this]
                 (get-cmd-impl syntax reader prompt)))))
+([]
+    (make-input-dialog 
+            *default-menu-prompt* 
+            *command-re* 
+            *command-re-partials* 
+            (fn [_ s] 
+                (str "Error: " s " doesn't follow syntax <" *command-re* ">"))))) 
 
 
 (defn printn [& args]
