@@ -1,8 +1,23 @@
 (ns fingerfood.menu
     (:require [clojure.core.match :refer [match] :as m])
-    (:import [jline.console ConsoleReader]))
+    (:import (jline.console ConsoleReader)
+             (java.util.regex Pattern)))
 
 (declare Command)
+
+(defn menu-prompt 
+"Prompt template into which are inserted  selection and filtering tags"
+([select-tag filter-tag]
+    (let [  select-tag (if select-tag (str "[" select-tag "] ") "")
+            filter-tag (if filter-tag (str "[" filter-tag "] ") "")]
+      (str select-tag filter-tag
+        "[Menu] [[n] Previous] [[n] Next] [[n] Up} [Quit] \n(<Enter> to exit this menu):")))
+([select-tag] 
+    (menu-prompt select-tag nil)))
+
+(def ^:dynamic *default-menu-prompt* (menu-prompt "Number"))
+(def ^:dynamic *command-re* #"(\d*)([ mMpPnNuUqQ])?|:e (.*)|")
+(def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
 
 (defprotocol Menu
 "A hierarchical view of a collection which can be browsed in a user-friendly way: display, selection, paging and 
@@ -60,21 +75,22 @@
          n-th menu above, or nil.")
     
     (end? [cmd]
-        "Yields a truthy value when the user wants to exit the menu hierarchy
-         entirely, nil otherwise.")
+        "Logically true only if the user wants to exit the menu hierarchy
+         entirely.")
 
     (page-n? [cmd]
         "Yields a number of pages forward or backward (negative) to navigate to 
-         in the current menu, or nil. Translates into Menu's next-n-pages/prev-n-pages")
+         in the current menu, or nil.")
 
     (history-n? [cmd]
-        "Unused - see Menu protocol's forward/back methods. Yields the number of
-         menus forward or back (negative) to navigate away from this menu in the
-         history, maps to Menu's forward/back methods.")
+        "Yields the number of  menus forward or back (negative) to navigate 
+         in the history.")
 
     (menu? [cmd]
-        "Yields a truthy value when the current menu is requested; nil/false otherwise.
-         Translates into Menu's display method.")
+        "Logically true only if the current menu is requested.")
+
+    (edit? [cmd]
+        "Yields a regular expression as a java.util.Pattern for filtering purposes, or nil.")
 
     (selection? [cmd]
         "Yields the user selection for the current menu if selecting, or nil. 
@@ -135,35 +151,47 @@
         (read-char [_] (.readCharacter term)))))
 
 
-(defn make-command [ & {:keys [up end page menu selection]}]
+(defn make-command [ & {:keys [up end page menu selection edit]}]
     (reify Command
         (up-n? [_] up)
         (end? [_] end)
         (page-n? [_] page) 
         (menu? [_] menu)
+        (edit? [_] edit)
         (selection? [_] selection)))
 
 
-(defn- parse-int [s zero?]
+(defn- parse-int 
+([s zero?]
     (match [s (empty? s) zero?]
         [ _ true true  ] 0
         [ _ true false ] nil
         [ s   _   _    ] (Integer/parseInt s)))
+([s]
+    (parse-int s true)))
         
+(defn- parse-regex [s]
+    (Pattern/compile s))
 
 (defn parse-command 
 "Parses a validated command input into a Command object, using
  *command-re* as syntax.
 "
 [^String cmd]
-   (condp re-matches cmd
-        #".*[mM]$" (make-command :menu true)
-        #".*[qQ]$" (make-command :end true)
-        #"^(\d*)[uU]$" :>> #(make-command :up (parse-int (nth % 1)))
-        #""           :>> (make-command :up 1)
-        #"^(\d*)[nN]$" :>> #(make-command :page (parse-int (nth % 1)))
-        #"^(\d*)[pP]$" :>> #(make-command :page (- (parse-int (nth % 1))))
-        #"^\d+$" :>> #(make-command :selection (parse-int %))))
+(let [ mc (fn ([type] (make-command type true))  
+              ([type digs & re] (make-command type 
+                                    (if re (Pattern/compile re)
+                                            (parse-int digs))))) ]
+    (match (re-matches *command-re* cmd)
+        ;; full, digits, cmd-type, re-str 
+        [_   _  (:or "q" "Q")   _  ]   (mc :end)
+        [_   _  (:or "m" "M")   _  ]   (mc :menu)
+        [""  _  _               _  ]   (mc :up "1")
+        [_   d  (:or "u" "U")   _  ]   (mc :up d)
+        [_   d  (:or "n" "N")   _  ]   (mc :page d)
+        [_   d  (:or "p" "P")   _  ]   (mc :page (str "-" d))
+        [_   _      _           re ]   (mc :edit nil re)
+        [_   d      nil       nil  ]   (mc :selection d))))
 
 
 (declare command-up prep-command exit-up at-target printn)
@@ -230,24 +258,11 @@
     (make-command :up (dec n)))
 
 
-(defn menu-prompt 
-"Prompt template into which are inserted  selection and filtering tags"
-([select-tag filter-tag]
-    (let [  select-tag (if select-tag (str "[" select-tag "] ") "")
-            filter-tag (if filter-tag (str "[" filter-tag "] ") "")]
-      (str select-tag filter-tag
-        "[Menu] [[n] Previous] [[n] Next] [[n] Up} [Quit] \n(<Enter> to exit this menu):")))
-([select-tag] 
-    (menu-prompt select-tag nil)))
 
-
-(def ^:dynamic *default-menu-prompt* (menu-prompt "Number"))
 
 (defn as-str [chars]
     (apply str chars))
 
-(def ^:dynamic *command-re* #"(\d*[ mMpPnNuUqQ]?|:e .*)|")
-(def ^:dynamic *command-re-partials* [ #"\d*", #":(e|e |e .*)?"])
 
 #_(defn read-command
 "Reads characters from r and yields the command string as soon as 
