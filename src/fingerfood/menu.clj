@@ -148,7 +148,6 @@
 ([]
     (make-command-syntax (fn [_] "Error, ppPAL!!"))))
 
-        
 
 (defn make-character-reader
 "Yields an instance ReadChar impl using jline.ConsoleReader.
@@ -206,6 +205,9 @@
 
 (declare command-up prep-command exit-up at-target printn)
 
+(defn cmd-vector [cmd]
+    [(end? cmd), (menu? cmd), (up? cmd), (page? cmd), (edit? cmd), (selection? cmd)])
+
 (defn browse 
 "Coordinates menu interactions with the user using semantics described in 
  the Menu protocol. Defines a session for all menus with the same backing
@@ -215,6 +217,15 @@
   (display menu)
   (loop [menu menu]
     (when-let [ cmd (-> (get-command menu) prep-command) ]
+        #_(match [ (cmd-vector cmd) ]
+    ;; end, menu, up, page, edit, selection
+        [_   nil  nil  nil  nil    nil   ]  nil
+        [nil  _   nil  nil  nil    nil   ]  (display menu)
+        [nil nil   n   nil  nil    nil   ]  (up menu n)
+        [nil nil  nil   n   nil    nil   ]  (page menu n)
+        [nil nil  nil  nil   re    nil   ]  (edit menu re)
+        [nil nil  nil  nil  nil    sel   ]  (select menu sel))
+
         (if-let [ pick (:selection cmd) ] 
             (let [new-menu (select menu pick)]
                 (if (nested? new-menu)
