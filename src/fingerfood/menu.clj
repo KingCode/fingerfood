@@ -6,13 +6,10 @@
 
 (defprotocol Menu
 "A hierarchical view of a collection which can be browsed in a user-friendly way: display, selection, paging and 
- navigation between levels and within recent browsing history.
+ history navigation (commands) between levels and within recent browsing history.
 
- All navigation commands except 'select must yield a Menu.
-
- For all menu commands, a request that can't be accomdated e.g. for an out-of-bounds target, should result in a
- sensible outcome: an error message and repeat prompt, or cycling are preferred rather than nil or throwing 
- an exception.
+ A menu is part of a hierarchy backed by paged data, and each menu is a distinct subsequence of 
+ `pagelen` sibling data items. All commands except 'select should yield a menu.
 "
     (coll [this]
         "Yields the backing collection")
@@ -52,21 +49,9 @@
 
 
 (defn make-menu 
-"Yields a menu hierarchy backed by data. Each menu is a sub sequence of pagelen
- from data, and menus at the same level don't overlap. Selecting an item 
- on a menu causes (select-fn item) to be called the first time, and the resulting
- value to be used on remaining selects to the same item.
- 
-For example the following interactions and hierarchies, where ^ points at the menu cursor,
-i.e. the menu ready to be manipulated.
-=> (def m (make-menu [1 2 3 4 5] 2 (fn [i] (range n)))
-=> [[1 2] [3 4] [5]]
-;;    ^ 
-=> (display menu)
-=> ;;display specific of items 1, 2
-=> (select menu 2)
-=> [0 1]
- "
+" Yields a menu of the initial `pagelen` items of `data`, with (select menu item) implemented
+  by select-fn.
+"
 [data pagelen select-fn])
 
 
